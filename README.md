@@ -2,6 +2,8 @@
 
 Hardware and firmware to convert infotaimment CAN messages.
 
+This project is inspired from [canbox](https://github.com/smartgauges/canbox) and was originally a [fork](https://github.com/haroldm/canbox) of it.
+
 Messages converted:
 * Illumination (autoradio dark or light mode) is converted to a 0V/12V binary signal
 * Accessory power is converted to a 0V/12V binary signal

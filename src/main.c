@@ -2,6 +2,12 @@
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/usart.h>
 
+#include <inttypes.h>
+
+#include "hw/can.h"
+#include "hw/tick.h"
+
+#include "can_parser.h"
 #include "clock.h"
 
 #define ILL_PORT     GPIOB
@@ -43,20 +49,80 @@ static void usart_send_string(const char *str)
     }
 }
 
+static void in_process(struct can_t * can, uint8_t ticks, struct msg_desc_t * msg_desc, uint8_t desc_num)
+{
+	uint8_t msgs_num = hw_can_get_msg_nums(can);
+	uint32_t all_packs = 0;
+
+	for (uint8_t i = 0; i < msgs_num; i++) {
+
+		struct msg_can_t msg;
+		if (!hw_can_get_msg(can, &msg, i))
+			continue;
+
+		all_packs += msg.num;
+
+		for (uint32_t j = 0; j < desc_num; j++) {
+
+			struct msg_desc_t * desc = &msg_desc[j];
+
+			//special purpose - any activity on the bus
+			if (0 == desc->id) {
+
+				if (desc->in_handler) {
+
+					//last msg
+					if (i == (msgs_num - 1)) {
+
+						if (all_packs == desc->num)
+							desc->tick += ticks;
+						else
+							desc->tick = 0;
+
+						desc->num = all_packs;
+
+						desc->in_handler(msg.data, desc);
+					}
+				}
+			}
+			else if (msg.id == desc->id) {
+
+				if (desc->in_handler) {
+
+					//no new packs, increase timeout
+					if (msg.num == desc->num)
+						desc->tick += ticks;
+					else
+						desc->tick = 0;
+
+					desc->num = msg.num;
+
+					desc->in_handler(msg.data, desc);
+				}
+
+				break;
+			}
+		}
+	}
+}
+
 int main(void)
 {
 	clock_setup();
     gpio_setup();
     usart_setup();
 
-    usart_send_string("Hello from STM32F1\r\n");
+    struct can_t* can = hw_can_get_mscan();
+
+    hw_can_setup(can, e_speed_100);
+
+    usart_send_string("CANTOTO firmware\r\n");
 
     while (1) {
-		usart_send_string("Toggling\r\n");
-        gpio_toggle(ILL_PORT, ILL_PIN);
-        for (volatile int i = 0; i < 4000000; i++) {
-            __asm__("nop");
-        }
+        if (timer.flag_5ms) {
+			timer.flag_5ms = 0;
+            in_process(can, 5, can_msgs, sizeof(can_msgs)/sizeof(can_msgs[0]));
+		}
     }
 
     return 0;
