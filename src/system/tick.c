@@ -1,3 +1,6 @@
+#include <libopencm3/cm3/nvic.h>
+#include <libopencm3/cm3/systick.h>
+
 #include "tick.h"
 
 volatile tick_t timer = {0, 0, 0, 0, 0, 0, 0};
@@ -37,3 +40,24 @@ void hw_systick_callback(void) {
     timer.flag_5ms = 1;
   }
 }
+
+void hw_systick_disable(void) {
+  systick_interrupt_disable();
+  systick_counter_disable();
+}
+
+void hw_systick_setup(void) {
+  /* 72MHz / 8 => 9000000 counts per second */
+  systick_set_clocksource(STK_CSR_CLKSOURCE_AHB_DIV8);
+  /* clear counter so it starts right away */
+  STK_CVR = 0;
+
+  systick_set_reload(9000000 / TICK_HZ);
+
+  systick_interrupt_enable();
+
+  /* Start counting. */
+  systick_counter_enable();
+}
+
+void sys_tick_handler(void) { hw_systick_callback(); }
