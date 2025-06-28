@@ -13186,6 +13186,19 @@
 		(layer "Edge.Cuts")
 		(uuid "f5fe0618-1d76-452c-8606-1f7c4fcd98ae")
 	)
+	(gr_text "CANTOTO rev0.2"
+		(at 40.6 55.2 0)
+		(layer "F.SilkS")
+		(uuid "d0396ca4-d952-4375-9871-ec185f4bbf4c")
+		(effects
+			(font
+				(size 1.5 1.5)
+				(thickness 0.3)
+				(bold yes)
+			)
+			(justify left bottom)
+		)
+	)
 	(segment
 		(start 51.28 80.57)
 		(end 51.28 77.8)
