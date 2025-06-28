@@ -1,2 +1,6 @@
 .pio
 .vscode
+.DS_Store
+fp-info-cache
+*-backups
+~*.lck
