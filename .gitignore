@@ -4,3 +4,4 @@
 fp-info-cache
 *-backups
 ~*.lck
+*.kicad_prl
