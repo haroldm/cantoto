@@ -1,9 +1,13 @@
-#include <libopencm3/stm32/gpio.h>
+#include <libopencm3/stm32/i2c.h>
 #include <libopencm3/stm32/rcc.h>
 
 #include <inttypes.h>
+#include <stdio.h>
+#include <string.h>
 
 #include "system/can.h"
+#include "system/gpio.h"
+#include "system/i2c.h"
 #include "system/tick.h"
 #include "system/usart.h"
 
@@ -11,13 +15,7 @@
 #include "clock.h"
 #include "state.h"
 
-#define ILL_PORT GPIOB
-#define ILL_PIN GPIO1
-
-static void gpio_setup(void) {
-  gpio_set_mode(ILL_PORT, GPIO_MODE_OUTPUT_2_MHZ, GPIO_CNF_OUTPUT_PUSHPULL,
-                ILL_PIN);
-}
+#define CMD_BUFFER_SIZE 64
 
 static void in_process(struct can_t *can, uint8_t ticks,
                        struct msg_desc_t *msg_desc, uint8_t desc_num) {
@@ -76,13 +74,91 @@ static void in_process(struct can_t *can, uint8_t ticks,
 }
 
 static void usart_process(void) {
+  static uint8_t debugtmp = 25;
+  static char cmd_buffer[CMD_BUFFER_SIZE];
+  static uint8_t idx = 0;
+  static bool last_was_cr = false;
   uint8_t ch = 0;
+
   if (!usart_read_ch(&ch))
     return;
-  usart_send_char(&ch);
-  if (ch == 'd') {
-    car_enable_debug();
-    usart_send_string("\r\ndebug mode enabled\r\n");
+
+  if (ch == '\n' && last_was_cr) {
+    last_was_cr = false;
+    return;
+  }
+
+  if (ch != '\n')
+    usart_send_char(&ch);
+
+  if (ch == '\r' || ch == '\n') {
+    last_was_cr = (ch == '\r');
+
+    if (idx == 0) {
+      usart_send_string("\r\n> ");
+      return;
+    }
+
+    cmd_buffer[idx] = '\0';
+
+    if (strcmp(cmd_buffer, "d") == 0) {
+      car_enable_debug();
+      usart_send_string("\r\ndebug mode enabled");
+    } else if (strcmp(cmd_buffer, "T") == 0) {
+      toggle_manual_on();
+      usart_send_string("\r\nToggled manual on");
+    } else if (strcmp(cmd_buffer, "+") == 0) {
+      set_simulating_media_key_press(true);
+      process_key_press(0x06);
+      usart_send_string("\r\nPressing vol+ for two seconds");
+    } else if (strcmp(cmd_buffer, "-") == 0) {
+      set_simulating_media_key_press(true);
+      process_key_press(0x07);
+      usart_send_string("\r\nPressing vol+ for two seconds");
+    } else if (strcmp(cmd_buffer, "vol") == 0) {
+      set_simulating_media_key_press(true);
+      process_key_press(0xA7);
+      usart_send_string("\r\nPressing vol button for two seconds");
+    } else if (strcmp(cmd_buffer, "left") == 0) {
+      set_simulating_media_key_press(true);
+      process_key_press(0x08);
+      usart_send_string("\r\nPressing left button for two seconds");
+    } else if (strcmp(cmd_buffer, "l") == 0) {
+      char tmp[80];
+      snprintf(tmp, 80, "sending value %d for ~250ms", debugtmp);
+      usart_send_string(tmp);
+      set_simulating_media_key_press(true);
+      hw_i2c_write(I2C1, 0x2F, debugtmp);
+      debugtmp += 1;
+      if (debugtmp >= 0x7f)
+        debugtmp = 0;
+    } else {
+      usart_send_string("\r\nunknown command");
+    }
+
+    idx = 0;
+    usart_send_string("\r\n> ");
+    return;
+  }
+
+  if (idx < CMD_BUFFER_SIZE - 1) {
+    cmd_buffer[idx++] = ch;
+  } else {
+    usart_send_string("\r\ncommand too long\r\n> ");
+    idx = 0;
+  }
+}
+
+static void reset_simulated_key_presses(void) {
+  static uint8_t count = 0;
+  if (get_simulating_media_key_press()) {
+    if (count < 2) {
+      count++;
+    } else {
+      count = 0;
+      process_key_press(0);
+      set_simulating_media_key_press(false);
+    }
   }
 }
 
@@ -96,14 +172,20 @@ int main(void) {
   hw_can_setup(can, e_speed_100);
   can_parser_init();
 
-  usart_send_string("CANTOTO firmware\r\n");
+  hw_i2c_setup();
+
+  usart_send_string("\r\nCANTOTO firmware\r\n\r\n> ");
 
   while (1) {
-    // gpio_process();
+    gpio_process();
     usart_process();
     if (timer.flag_5ms) {
       timer.flag_5ms = 0;
       in_process(can, 5, can_msgs, can_msgs_len);
+    }
+    if (timer.flag_250ms) {
+      timer.flag_250ms = 0;
+      reset_simulated_key_presses();
     }
   }
 

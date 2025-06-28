@@ -10,4 +10,7 @@ struct gpio_t {
 };
 #define GPIO_INIT(PORT, PIN) {RCC_GPIO##PORT, GPIO##PORT, GPIO##PIN}
 
+void gpio_setup(void);
+void gpio_process(void);
+
 #endif // __GPIO_H__

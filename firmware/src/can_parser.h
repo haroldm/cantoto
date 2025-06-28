@@ -21,5 +21,6 @@ void can_parser_init(void);
 void handler_2c3(const uint8_t *msg, struct msg_desc_t *desc);
 void handler_635(const uint8_t *msg, struct msg_desc_t *desc);
 void handler_5c3(const uint8_t *msg, struct msg_desc_t *desc);
+void process_key_press(uint8_t id);
 
 #endif
